@@ -445,8 +445,6 @@ Perform an action with the file:
       - |-
 {{ contents | trim | indent(8) }}
     - makedirs: True
-    - backup: True
-{% endif %}
 {% elif action == 'permissions' %}
   file.managed:
     - create: False
