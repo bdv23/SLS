@@ -442,9 +442,9 @@ Perform an action with the file:
 {{ name }}:
   file.append:
     - text:
-{% for line in contents.splitlines() %}
-      - {{ line | replace('"', '\\"') | yaml_dquote }}
-{% endfor %}
+      {% for line in contents.splitlines() %}
+        - {{ line | replace('"', '\\"') | yaml_dquote }}
+      {% endfor %}
     - makedirs: True
 {% elif action == 'permissions' %}
   file.managed:
