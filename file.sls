@@ -439,15 +439,8 @@ end_schema#}
 {% if action is defined %}
 Perform an action with the file:
 {% if action == 'append' %}
-{{ name }}:
   file.append:
-    - text:
-{% if contents is string and contents.strip() == '' %}
-      []
-{% else %}
-      - |-
-{{ contents | trim | indent(8) }}
-{% endif %}
+    - |- {{ contents | trim | indent(8) }}
     - makedirs: True
 {% elif action == 'permissions' %}
   file.managed:
