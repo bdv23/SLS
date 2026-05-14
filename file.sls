@@ -441,13 +441,18 @@ Perform an action with the file:
 {% if action == 'append' %}
   file.append:
     - text:
-      {% for line in contents.splitlines() %}
-        - {{ line | replace('"', '\"') | yaml_dquote }}
-          {% endfor %}
+{% if contents.strip() == '' %}
+      []
+{% else %}
+{% for line in contents.splitlines() %}
+      - {{ line | replace('"', '\\"') | yaml_dquote }}
+{% endfor %}
+{% endif %}
     - makedirs: True
     - backup: True
 {% elif action == 'permissions' %}
   file.managed:
+    - name: {{ name }}
     - create: False
     - keep_source: False
     - mode: '{{ mode }}'
@@ -455,54 +460,64 @@ Perform an action with the file:
     - group: {{ group }}
 {% elif action == 'comment' %}
   file.comment:
+    - name: {{ name }}
     - regex: '{{ match }}'
     - ignore_missing: True
 {% elif action == 'copy' %}
   file.copy:
+    - name: {{ name }}
     - source: {{ source }}
     - makedirs: True
     - force: True
 {% elif action == 'symlink' %}
   file.symlink:
+    - name: {{ name }}
     - target: {{ target }}
     - makedirs: True
     - force: True
 {% elif action == 'delete' %}
   file.line:
-    - mode: {{ action }}
+    - name: {{ name }}
+    - mode: delete
     - match: '{{ match }}'
 {% elif action == 'absent' %}
   file.absent:
+    - name: {{ name }}
 {% elif action == 'keyvalue' %}
   file.keyvalue:
+    - name: {{ name }}
     - key_values:
-        {% for content in contents.split('\n') %}
-        {{ content.split(separator) | map('trim') | map('quote') | join(': ') }}
-        {% endfor %}
+{% for content in contents.split('\n') %}
+      - {{ content.split(separator, 1) | map('trim') | map('quote') | join(': ') }}
+{% endfor %}
     - separator: '{{ separator }}'
-    - uncomment: '{{ chars }}'
+    - chars: '{{ chars }}'
     - count: {{ count }}
     - key_ignore_case: True
     - append_if_not_found: True
 {% elif action == 'replace' %}
   file.replace:
+    - name: {{ name }}
     - pattern: '{{ match }}'
     - repl: '{{ repl }}'
     - count: {{ count }}
     - backup: False
 {% elif action == 'uncomment' %}
   file.uncomment:
-    - regex: '{ match }}'
+    - name: {{ name }}
+    - regex: '{{ match }}'
 {% elif action == 'write' %}
   file.managed:
-    - contents: {{ contents.split('\n') }}
+    - name: {{ name }}
+    - contents: |
+{{ contents | indent(6) }}
     - keep_source: False
     - makedirs: True
 {% elif action == 'get' %}
   file.{{ 'recurse' if source_type == 'directory' else 'managed' }}:
+    - name: {{ name }}
     - source: {{ source }}
     - keep_source: False
     - makedirs: True
 {% endif %}
-    - name: {{ name }}
 {% endif %}
