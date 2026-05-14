@@ -1,8 +1,8 @@
 {#start_schema
 {
   "description": {
-    "en": "Managing files and directories.",
-    "ru": "Управление файлами и каталогами."
+    "en": "MY Managing files and directories.",
+    "ru": "MY Управление файлами и каталогами."
   },
   "json_schema": {
     "type": "object",
@@ -31,7 +31,7 @@
                 "default": "append",
                 "oneOf": [
                   {
-                    "title": "Append lines",
+                    "title": "MY Append lines",
                     "const": "append"
                   },
                   {
