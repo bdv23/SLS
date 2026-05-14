@@ -449,7 +449,6 @@ Perform an action with the file:
 {% endfor %}
 {% endif %}
     - makedirs: True
-    - backup: True
 {% elif action == 'permissions' %}
   file.managed:
     - name: {{ name }}
