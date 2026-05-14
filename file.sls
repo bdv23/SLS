@@ -1,12 +1,12 @@
 {#start_schema
 {
   "description": {
-    "en": "MY Managing files and directories.",
-    "ru": "MY Управление файлами и каталогами."
+    "en": "Managing files and directories.",
+    "ru": "Управление файлами и каталогами."
   },
   "json_schema": {
     "type": "object",
-    "title": "MY -  System - Files and directories",
+    "title": "Base - System - Files and directories",
     "additionalProperties": false,
     "required": [
       "kwargs"
@@ -31,7 +31,7 @@
                 "default": "append",
                 "oneOf": [
                   {
-                    "title": "MY Append lines",
+                    "title": "Append lines",
                     "const": "append"
                   },
                   {
@@ -436,128 +436,76 @@ end_schema#}
 {% set group       = pillar.get('group', '') %}
 {% set source_type = pillar.source_type %}
 
-{# Fully working Jinja SLS fragment for file actions. #}
-{% set action = pillar.get('action') %}
-{% set name = pillar.get('name') %}
-{% set contents = pillar.get('contents', '') %}
-{% set match = pillar.get('match', '') %}
-{% set repl = pillar.get('repl', '') %}
-{% set count = pillar.get('count', 1) | int %}
-{% set separator = pillar.get('separator', '=') %}
-{% set chars = pillar.get('chars', '#') %}
-{% set target = pillar.get('target', '') %}
-{% set source = pillar.get('source', '') %}
-{% set mode = pillar.get('mode', '') %}
-{% set user = pillar.get('user', '') %}
-{% set group = pillar.get('group', '') %}
-{% set source_type = pillar.get('source_type', 'file') %}
-
-{# Safety: ensure name exists to avoid empty-state keys #}
-{% if name is not defined or name == '' %}
-{% set name = '/tmp/unnamed_state' %}
-{% endif %}
-
 {% if action is defined %}
 Perform an action with the file:
 {% if action == 'append' %}
 {{ name }}:
   file.append:
     - text:
+{% if contents is string and contents.strip() == '' %}
+      []
+{% else %}
       - |-
 {{ contents | trim | indent(8) }}
+{% endif %}
     - makedirs: True
-    - backup: True
-
 {% elif action == 'permissions' %}
-{{ name }}:
   file.managed:
-    - name: {{ name }}
     - create: False
     - keep_source: False
     - mode: '{{ mode }}'
     - user: {{ user }}
     - group: {{ group }}
-
 {% elif action == 'comment' %}
-{{ name }}:
   file.comment:
-    - name: {{ name }}
     - regex: '{{ match }}'
     - ignore_missing: True
-
 {% elif action == 'copy' %}
-{{ name }}:
   file.copy:
-    - name: {{ name }}
     - source: {{ source }}
     - makedirs: True
     - force: True
-
 {% elif action == 'symlink' %}
-{{ name }}:
   file.symlink:
-    - name: {{ name }}
     - target: {{ target }}
     - makedirs: True
     - force: True
-
 {% elif action == 'delete' %}
-{{ name }}:
   file.line:
-    - name: {{ name }}
-    - mode: delete
+    - mode: {{ action }}
     - match: '{{ match }}'
-
 {% elif action == 'absent' %}
-{{ name }}:
   file.absent:
-    - name: {{ name }}
-
 {% elif action == 'keyvalue' %}
-{{ name }}:
   file.keyvalue:
-    - name: {{ name }}
     - key_values:
-{% for content in contents.split('\n') %}
-      - {{ content.split(separator, 1) | map('trim') | map('quote') | join(': ') }}
-{% endfor %}
+        {% for content in contents.split('\n') %}
+        {{ content.split(separator) | map('trim') | map('quote') | join(': ') }}
+        {% endfor %}
     - separator: '{{ separator }}'
-    - chars: '{{ chars }}'
+    - uncomment: '{{ chars }}'
     - count: {{ count }}
     - key_ignore_case: True
     - append_if_not_found: True
-
 {% elif action == 'replace' %}
-{{ name }}:
   file.replace:
-    - name: {{ name }}
     - pattern: '{{ match }}'
     - repl: '{{ repl }}'
     - count: {{ count }}
     - backup: False
-
 {% elif action == 'uncomment' %}
-{{ name }}:
   file.uncomment:
-    - name: {{ name }}
-    - regex: '{{ match }}'
-
+    - regex: '{ match }}'
 {% elif action == 'write' %}
-{{ name }}:
   file.managed:
-    - name: {{ name }}
-    - contents: |
-{{ contents | indent(6) }}
+    - contents: {{ contents.split('\n') }}
     - keep_source: False
     - makedirs: True
-
 {% elif action == 'get' %}
-{{ name }}:
   file.{{ 'recurse' if source_type == 'directory' else 'managed' }}:
-    - name: {{ name }}
     - source: {{ source }}
     - keep_source: False
     - makedirs: True
-
 {% endif %}
+    - name: {{ name }}
 {% endif %}
