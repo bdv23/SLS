@@ -436,20 +436,59 @@ end_schema#}
 {% set group       = pillar.get('group', '') %}
 {% set source_type = pillar.source_type %}
 
+{# Fully working Jinja SLS fragment for file actions. Place inside your SLS file. #}
+{% set action = pillar.get('action') %}
+{% set name = pillar.get('name') %}
+{% set contents = pillar.get('contents', '') %}
+{% set match = pillar.get('match', '') %}
+{% set repl = pillar.get('repl', '') %}
+{% set count = pillar.get('count', 1) | int %}
+{% set separator = pillar.get('separator', '=') %}
+{% set chars = pillar.get('chars', '#') %}
+{% set target = pillar.get('target', '') %}
+{% set source = pillar.get('source', '') %}
+{% set mode = pillar.get('mode', '') %}
+{% set user = pillar.get('user', '') %}
+{% set group = pillar.get('group', '') %}
+{% set source_type = pillar.get('source_type', 'file') %}
+
+{% if action %}
+perform_action_{{ name | replace('/', '_') | replace('.', '_') | default('unknown') }}:
+  test.show_notification:
+    - text: "Perform an action with the file: {{ action }}"
+{% endif %}
+
 {% if action is defined %}
 Perform an action with the file:
 {% if action == 'append' %}
+{{ name }}:
   file.append:
     - text:
-{% if contents.strip() == '' %}
+{% if contents is string and contents.strip() == '' %}
       []
 {% else %}
+{# Safe: either render whole block as one multiline element (keep exact YAML), or render per-line.
+   Use multiline-block approach to preserve internal indentation of YAML content. Uncomment chosen variant. #}
+
+{# Variant A — insert entire contents as one multiline block (exact copy). Good when you must preserve YAML indentation. #}
+    - text:
+      - |-
+{{ contents | trim | indent(8) }}
+    - makedirs: True
+    - backup: True
+
+{# Variant B — per-line insertion (safer if you don't rely on exact leading spaces).
+    Uncomment and use instead of Variant A by removing Variant A above. #}
+{# 
+    - text:
 {% for line in contents.splitlines() %}
       - {{ line | replace('"', '\\"') | yaml_dquote }}
 {% endfor %}
-{% endif %}
     - makedirs: True
+    - backup: True
+#}
 {% elif action == 'permissions' %}
+{{ name }}:
   file.managed:
     - name: {{ name }}
     - create: False
@@ -458,31 +497,37 @@ Perform an action with the file:
     - user: {{ user }}
     - group: {{ group }}
 {% elif action == 'comment' %}
+{{ name }}:
   file.comment:
     - name: {{ name }}
     - regex: '{{ match }}'
     - ignore_missing: True
 {% elif action == 'copy' %}
+{{ name }}:
   file.copy:
     - name: {{ name }}
     - source: {{ source }}
     - makedirs: True
     - force: True
 {% elif action == 'symlink' %}
+{{ name }}:
   file.symlink:
     - name: {{ name }}
     - target: {{ target }}
     - makedirs: True
     - force: True
 {% elif action == 'delete' %}
+{{ name }}:
   file.line:
     - name: {{ name }}
     - mode: delete
     - match: '{{ match }}'
 {% elif action == 'absent' %}
+{{ name }}:
   file.absent:
     - name: {{ name }}
 {% elif action == 'keyvalue' %}
+{{ name }}:
   file.keyvalue:
     - name: {{ name }}
     - key_values:
@@ -495,6 +540,7 @@ Perform an action with the file:
     - key_ignore_case: True
     - append_if_not_found: True
 {% elif action == 'replace' %}
+{{ name }}:
   file.replace:
     - name: {{ name }}
     - pattern: '{{ match }}'
@@ -502,10 +548,12 @@ Perform an action with the file:
     - count: {{ count }}
     - backup: False
 {% elif action == 'uncomment' %}
+{{ name }}:
   file.uncomment:
     - name: {{ name }}
     - regex: '{{ match }}'
 {% elif action == 'write' %}
+{{ name }}:
   file.managed:
     - name: {{ name }}
     - contents: |
@@ -513,6 +561,7 @@ Perform an action with the file:
     - keep_source: False
     - makedirs: True
 {% elif action == 'get' %}
+{{ name }}:
   file.{{ 'recurse' if source_type == 'directory' else 'managed' }}:
     - name: {{ name }}
     - source: {{ source }}
