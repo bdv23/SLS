@@ -439,12 +439,10 @@ end_schema#}
 {% if action is defined %}
 Perform an action with the file:
 {% if action == 'append' %}
-  file.append:
-    - text:
-      {% for line in contents.splitlines() %}
-        - {{ line | replace('"', '\\"') | yaml_dquote }}
-      {% endfor %}
-    - makedirs: True
+file.append:
+  - text: |
+    {{ contents | indent(6) }}
+  - makedirs: True
 {% elif action == 'permissions' %}
   file.managed:
     - create: False
