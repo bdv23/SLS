@@ -439,7 +439,6 @@ end_schema#}
 {% if action is defined %}
 Perform an action with the file:
 {% if action == 'append' %}
-{{ name }}:
   file.append:
     - text:
       {% for line in contents.splitlines() %}
