@@ -6,7 +6,7 @@
   },
   "json_schema": {
     "type": "object",
-    "title": "Base - System - Files and directories",
+    "title": "MY - Files and directories",
     "additionalProperties": false,
     "required": [
       "kwargs"
