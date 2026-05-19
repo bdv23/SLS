@@ -441,7 +441,7 @@ Perform an action with the file:
 {% if action == 'append' %}
   file.append:
     - text: |
-{{ contents | indent(6) }}
+{{ contents | indent(8) }}
     - makedirs: True
 {% elif action == 'permissions' %}
   file.managed:
