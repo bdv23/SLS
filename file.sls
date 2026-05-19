@@ -440,10 +440,9 @@ end_schema#}
 Perform an action with the file:
 {% if action == 'append' %}
 file.append:
-  - text:
-    {% for line in contents.splitlines() %}
-      - {{ line | replace('"', '\\\\"') | yaml_dquote }}
-    {% endfor %}
+  - text:   
+    - "\n"
+    - nextline
   - makedirs: True
 {% elif action == 'permissions' %}
   file.managed:
