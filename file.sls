@@ -440,8 +440,7 @@ end_schema#}
 Perform an action with the file:
 {% if action == 'append' %}
   file.append:
-    - text: |
-{{ contents | indent(8) }}
+    - text: {{ contents | yaml_encode }}
     - makedirs: True
 {% elif action == 'permissions' %}
   file.managed:
