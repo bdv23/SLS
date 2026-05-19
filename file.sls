@@ -443,7 +443,6 @@ file.append:
   - text:   
     - "\n"
     - nextline
-  - makedirs: True
 {% elif action == 'permissions' %}
   file.managed:
     - create: False
