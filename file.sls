@@ -440,7 +440,8 @@ end_schema#}
 Perform an action with the file:
 {% if action == 'append' %}
   file.append:
-    - text: {{ contents }}
+    - text: |
+{{ contents | indent(6) }}
     - makedirs: True
 {% elif action == 'permissions' %}
   file.managed:
