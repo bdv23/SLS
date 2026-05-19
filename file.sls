@@ -439,10 +439,9 @@ end_schema#}
 {% if action is defined %}
 Perform an action with the file:
 {% if action == 'append' %}
-file.append:
-  - text:   
-    - "\n"
-    - nextline
+  file.append:
+    - text: {{ contents }}
+    - makedirs: True
 {% elif action == 'permissions' %}
   file.managed:
     - create: False
