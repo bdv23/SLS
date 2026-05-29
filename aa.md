@@ -1,4 +1,25 @@
-2026-05-29 12:59:01,297 [salt.auth        :313 ][WARNING ][2759053] Authentication failure of type "eauth" occurred.
-2026-05-29 12:59:01,297 [salt.master      :2194][WARNING ][2759053] Authentication failure of type "eauth" occurred.
-2026-05-29 12:59:25,223 [salt.auth        :313 ][WARNING ][2759045] Authentication failure of type "eauth" occurred.
-2026-05-29 12:59:25,223 [salt.master      :2194][WARNING ][2759045] Authentication failure of type "eauth" occurred.
+# /etc/salt/master.d/03-openldap.conf
+```
+auth.ldap.server: localhost
+auth.ldap.port: 389
+auth.ldap.tls: False
+auth.ldap.uri: 'ldap://localhost:389/'
+
+auth.ldap.binddn: 'cn=admin,dc=sc,dc=local'
+auth.ldap.bindpw: 'admin123'
+
+# Ищем от корня, чтобы не промахнуться
+auth.ldap.basedn: 'dc=sc,dc=local'
+auth.ldap.filter: '(uid=%s)'
+
+auth.ldap.accountattributename: 'uid'
+auth.ldap.userattribute: 'uid'
+
+# Группы
+auth.ldap.groupou: 'ou=groups,dc=sc,dc=local'
+auth.ldap.groupclass: 'groupOfNames'
+auth.ldap.groupattribute: 'member'
+
+auth.ldap.activedirectory: False
+auth.ldap.timeout: 10
+```
