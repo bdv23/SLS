@@ -1,3 +1,98 @@
+# Удалить старых пользователей
+docker exec openldap ldapdelete -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 \
+  "uid=i.ivanov,ou=users,dc=sc,dc=local"
+
+docker exec openldap ldapdelete -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 \
+  "uid=p.petrov,ou=users,dc=sc,dc=local"
+
+docker exec openldap ldapdelete -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 \
+  "uid=s.sidorov,ou=users,dc=sc,dc=local"
+
+# Создать заново с паролями в открытом виде (контейнер сам захеширует)
+cat > /tmp/users_new.ldif <<'EOF'
+dn: uid=i.ivanov,ou=users,dc=sc,dc=local
+objectClass: inetOrgPerson
+uid: i.ivanov
+cn: Ivan Ivanov
+sn: Ivanov
+givenName: Ivan
+userPassword: Qwerty123!
+mail: i.ivanov@sc.local
+
+dn: uid=p.petrov,ou=users,dc=sc,dc=local
+objectClass: inetOrgPerson
+uid: p.petrov
+cn: Petr Petrov
+sn: Petrov
+givenName: Petr
+userPassword: Qwerty123!
+mail: p.petrov@sc.local
+
+dn: uid=s.sidorov,ou=users,dc=sc,dc=local
+objectClass: inetOrgPerson
+uid: s.sidorov
+cn: Sidor Sidorov
+sn: Sidorov
+givenName: Sidor
+userPassword: Qwerty123!
+mail: s.sidorov@sc.local
+EOF
+
+docker cp /tmp/users_new.ldif openldap:/tmp/
+docker exec openldap ldapadd -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 \
+  -f /tmp/users_new.ldif
+
+# Повторно добавить в группы
+docker exec openldap ldapmodify -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 <<EOF
+dn: cn=salt-admins,ou=groups,dc=sc,dc=local
+changetype: modify
+add: member
+member: uid=i.ivanov,ou=users,dc=sc,dc=local
+EOF
+
+docker exec openldap ldapmodify -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 <<EOF
+dn: cn=salt-operators,ou=groups,dc=sc,dc=local
+changetype: modify
+add: member
+member: uid=p.petrov,ou=users,dc=sc,dc=local
+EOF
+
+docker exec openldap ldapmodify -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 <<EOF
+dn: cn=salt-users,ou=groups,dc=sc,dc=local
+changetype: modify
+add: member
+member: uid=s.sidorov,ou=users,dc=sc,dc=local
+EOF
+
+
+
+
+
+
+
+
+
+
+---
+
+
+---
+
+
 # Установить пароль для i.ivanov
 docker exec openldap ldappasswd -x \
   -D "cn=admin,dc=sc,dc=local" \
