@@ -1,3 +1,4 @@
+```
 # Удалить старых пользователей
 docker exec openldap ldapdelete -x \
   -D "cn=admin,dc=sc,dc=local" \
@@ -78,7 +79,7 @@ add: member
 member: uid=s.sidorov,ou=users,dc=sc,dc=local
 EOF
 
-
+```
 
 
 
