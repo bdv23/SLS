@@ -657,3 +657,8 @@ external_auth:
 | Дата | Автор | Изменение |
 |------|-------|-----------|
 | 2026-05-29 | — | Начальная версия |
+docker run -d -p 389:389 -p 636:636 --name openldap `
+  -e LDAP_ORGANISATION="Test" `
+  -e LDAP_DOMAIN="test.local" `
+  -e LDAP_ADMIN_PASSWORD="admin123" `
+  osixia/openldap:latest
