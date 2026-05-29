@@ -1,3 +1,30 @@
+# Установить пароль для i.ivanov
+docker exec openldap ldappasswd -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 \
+  -s "Qwerty123!" \
+  "uid=i.ivanov,ou=users,dc=sc,dc=local"
+
+# Установить пароль для p.petrov
+docker exec openldap ldappasswd -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 \
+  -s "Qwerty123!" \
+  "uid=p.petrov,ou=users,dc=sc,dc=local"
+
+# Установить пароль для s.sidorov
+docker exec openldap ldappasswd -x \
+  -D "cn=admin,dc=sc,dc=local" \
+  -w admin123 \
+  -s "Qwerty123!" \
+  "uid=s.sidorov,ou=users,dc=sc,dc=local"
+
+
+
+
+
+
+
 Вот обновлённые LDIF-файлы с доменом `sc.local` и хешами паролей `Qwerty123!`:
 
 ---
