@@ -1,4 +1,15 @@
 ```
+2026-05-29 12:51:45,321 [salt.loaded.int.auth.ldap:301 ][ERROR   ][2756729] LDAP lookup found multiple results for user i.ivanov
+2026-05-29 12:51:45,322 [salt.loaded.int.auth.ldap:370 ][ERROR   ][2756729] LDAP _bind authentication FAILED
+2026-05-29 12:51:46,424 [salt.auth        :313 ][WARNING ][2756729] Authentication failure of type "eauth" occurred.
+2026-05-29 12:51:46,424 [salt.master      :2194][WARNING ][2756729] Authentication failure of type "eauth" occurred.
+
+```
+
+---
+---
+---
+```
 # Удалить старых пользователей
 docker exec openldap ldapdelete -x \
   -D "cn=admin,dc=sc,dc=local" \
