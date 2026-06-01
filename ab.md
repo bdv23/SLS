@@ -1,3 +1,5 @@
+```
+
 dn: dc=sc,dc=local
 objectClass: top
 objectClass: dcObject
@@ -54,3 +56,4 @@ sn: Sidorov
 givenName: Sidor
 userPassword:: UXdlcnR5MTIzIQ==
 mail: s.sidorov@sc.local
+```
