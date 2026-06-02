@@ -1,166 +1,122 @@
-Вот исправленный вариант — ищем OU, а не компьютер:
-
-```python
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Custom Salt grain: ldap_host для Active Directory
-Ищет OU, в которой находится компьютер
-"""
-
-import socket
-
-__virtualname__ = 'ldap_host'
-
-LDAP_SERVER = 'ldap://172.18.84.18:389'
-LDAP_BIND_DN = 'CN=Administrator,CN=Users,DC=sc,DC=local'
-LDAP_BIND_PW = 'qwe123!@#'
-LDAP_DOMAIN_BASE = 'DC=sc,DC=local'
-
-# Маппинг: имя миньона Salt -> имя компьютера в AD
-MINION_TO_AD_MAPPING = {
-    'debian-minion-1': 'debian',
-    'ubuntu-minion-1': 'ubuntu',
-    'salt-master': 'salt-master',
-    'usaltm': 'usaltm',
-}
-
-
-def __virtual__():
-    return __virtualname__
-
-
-def _extract_ous_from_dn(dn_str):
-    """Извлекает все значения OU из строки DN (сверху вниз)."""
-    if isinstance(dn_str, bytes):
-        dn_str = dn_str.decode('utf-8')
-    ous = []
-    for part in dn_str.split(','):
-        part = part.strip()
-        if part.upper().startswith('OU='):
-            ous.append(part[3:])
-    return ous
-
-
-def ldap_host():
-    grains = {}
-
-    minion_id = __opts__.get('id', socket.gethostname())
-
-    if minion_id in MINION_TO_AD_MAPPING:
-        computer_name = MINION_TO_AD_MAPPING[minion_id]
-    else:
-        computer_name = minion_id.split('.')[0]
-
-    default_grains = {
-        'ldap_host_group': 'unassigned',
-        'ldap_role': 'unassigned',
-        'ldap_host_ous': [],
-        'ldap_host_parent_ou': 'None',
-        'ldap_host_groups': [],
-        'ldap_host_id': minion_id,
-        'ldap_search_name': computer_name,
-    }
-
-    grains.update(default_grains)
-
-    try:
-        import ldap
-    except ImportError:
-        grains['ldap_error'] = 'python3-ldap not installed'
-        return grains
-
-    conn = None
-    try:
-        conn = ldap.initialize(LDAP_SERVER)
-        conn.set_option(ldap.OPT_REFERRALS, 0)
-        conn.set_option(ldap.OPT_TIMEOUT, 10)
-        conn.simple_bind_s(LDAP_BIND_DN, LDAP_BIND_PW)
-
-        # Ищем компьютер по sAMAccountName (с $ в конце)
-        search_filter = f"(&(objectClass=computer)(sAMAccountName={computer_name}$))"
-
-        result = conn.search_s(
-            LDAP_DOMAIN_BASE,
-            ldap.SCOPE_SUBTREE,
-            search_filter,
-            ['distinguishedName', 'memberOf']
-        )
-
-        if not result:
-            grains['ldap_error'] = f'Computer {computer_name} not found in AD'
-            return grains
-
-        host_dn, attrs = result[0]
-        host_dn_str = host_dn.decode('utf-8') if isinstance(host_dn, bytes) else host_dn
-
-        grains['ldap_full_dn'] = host_dn_str
-
-        # Извлекаем OU из DN компьютера (ближайшая OU = первая в списке)
-        ous = _extract_ous_from_dn(host_dn_str)
-        grains['ldap_host_ous'] = ous
-        if ous:
-            grains['ldap_host_parent_ou'] = ous[0]
-
-        # Парсим memberOf
-        groups_cn = []
-        memberOf_key = None
-        for key in attrs:
-            if (isinstance(key, bytes) and key.lower() == b'memberof') or \
-               (isinstance(key, str) and key.lower() == 'memberof'):
-                memberOf_key = key
-                break
-
-        if memberOf_key:
-            for group_dn in attrs[memberOf_key]:
-                group_str = group_dn.decode('utf-8') if isinstance(group_dn, bytes) else group_dn
-                parts = group_str.split(',')
-                if parts and parts[0].upper().startswith('CN='):
-                    groups_cn.append(parts[0][3:])
-
-        grains['ldap_host_groups'] = groups_cn
-
-        # ldap_host_group = первая группа или первая OU
-        if groups_cn:
-            grains['ldap_host_group'] = groups_cn[0]
-        elif ous:
-            grains['ldap_host_group'] = ous[0]
-
-        # ldap_role = ближайшая OU (первая в списке) или первая группа
-        if ous:
-            grains['ldap_role'] = ous[0]
-        elif groups_cn:
-            grains['ldap_role'] = groups_cn[0]
-
-    except ldap.SERVER_DOWN:
-        grains['ldap_error'] = 'LDAP server unreachable'
-    except ldap.INVALID_CREDENTIALS:
-        grains['ldap_error'] = 'Invalid bind credentials'
-    except Exception as e:
-        grains['ldap_error'] = str(e)
-    finally:
-        if conn:
-            try:
-                conn.unbind_s()
-            except:
-                pass
-
-    return grains
 ```
+ldapsearch -x -H ldap://192.168.1.12:389   -D "CN=Administrator,CN=Users,DC=sc,DC=local"   -w 'qwe123!@#'   -b "DC=sc,DC=local"   "(objectClass=*)"   distinguishedName | grep OU= -A 5 -B 5
+# Computers, sc.local
+dn: CN=Computers,DC=sc,DC=local
+distinguishedName: CN=Computers,DC=sc,DC=local
 
-Если OU всё равно пустые — проверь структуру AD:
+# Domain Controllers, sc.local
+dn: OU=Domain Controllers,DC=sc,DC=local
+distinguishedName: OU=Domain Controllers,DC=sc,DC=local
 
-```bash
-# На любом Linux с ldapsearch:
-ldapsearch -x -H ldap://172.18.84.18:389 \
-  -D "CN=Administrator,CN=Users,DC=sc,DC=local" \
-  -w 'qwe123!@#' \
-  -b "DC=sc,DC=local" \
-  "(&(objectClass=computer)(sAMAccountName=debian$))" \
-  distinguishedName
+# System, sc.local
+dn: CN=System,DC=sc,DC=local
+distinguishedName: CN=System,DC=sc,DC=local
 
-# Должно вернуть что-то вроде:
-# dn: CN=debian,OU=Servers,OU=Production,DC=sc,DC=local
+--
+# Server, System, sc.local
+dn: CN=Server,CN=System,DC=sc,DC=local
+distinguishedName: CN=Server,CN=System,DC=sc,DC=local
+
+# DC1, Domain Controllers, sc.local
+dn: CN=DC1,OU=Domain Controllers,DC=sc,DC=local
+distinguishedName: CN=DC1,OU=Domain Controllers,DC=sc,DC=local
+
+# krbtgt, Users, sc.local
+dn: CN=krbtgt,CN=Users,DC=sc,DC=local
+distinguishedName: CN=krbtgt,CN=Users,DC=sc,DC=local
+
+--
+# RID Manager$, System, sc.local
+dn: CN=RID Manager$,CN=System,DC=sc,DC=local
+distinguishedName: CN=RID Manager$,CN=System,DC=sc,DC=local
+
+# RID Set, DC1, Domain Controllers, sc.local
+dn: CN=RID Set,CN=DC1,OU=Domain Controllers,DC=sc,DC=local
+distinguishedName: CN=RID Set,CN=DC1,OU=Domain Controllers,DC=sc,DC=local
+
+# DnsAdmins, Users, sc.local
+dn: CN=DnsAdmins,CN=Users,DC=sc,DC=local
+distinguishedName: CN=DnsAdmins,CN=Users,DC=sc,DC=local
+
+--
+ ngs,CN=System,DC=sc,DC=local
+distinguishedName: CN=WIN-ELG3JUM4EMG,CN=Topology,CN=Domain System Volume,CN=D
+ FSR-GlobalSettings,CN=System,DC=sc,DC=local
+
+# DFSR-LocalSettings, DC1, Domain Controllers, sc.local
+dn: CN=DFSR-LocalSettings,CN=DC1,OU=Domain Controllers,DC=sc,DC=local
+distinguishedName: CN=DFSR-LocalSettings,CN=DC1,OU=Domain Controllers,DC=sc,DC
+ =local
+
+# Domain System Volume, DFSR-LocalSettings, DC1, Domain Controllers, sc.local
+dn: CN=Domain System Volume,CN=DFSR-LocalSettings,CN=DC1,OU=Domain Controllers
+ ,DC=sc,DC=local
+distinguishedName: CN=Domain System Volume,CN=DFSR-LocalSettings,CN=DC1,OU=Dom
+ ain Controllers,DC=sc,DC=local
+
+# SYSVOL Subscription, Domain System Volume, DFSR-LocalSettings, DC1, Domain Co
+ ntrollers, sc.local
+dn: CN=SYSVOL Subscription,CN=Domain System Volume,CN=DFSR-LocalSettings,CN=DC
+ 1,OU=Domain Controllers,DC=sc,DC=local
+distinguishedName: CN=SYSVOL Subscription,CN=Domain System Volume,CN=DFSR-Loca
+ lSettings,CN=DC1,OU=Domain Controllers,DC=sc,DC=local
+
+# DHCP Users, Users, sc.local
+dn: CN=DHCP Users,CN=Users,DC=sc,DC=local
+distinguishedName: CN=DHCP Users,CN=Users,DC=sc,DC=local
+
+--
+# BCKUPKEY_PREFERRED Secret, System, sc.local
+dn: CN=BCKUPKEY_PREFERRED Secret,CN=System,DC=sc,DC=local
+distinguishedName: CN=BCKUPKEY_PREFERRED Secret,CN=System,DC=sc,DC=local
+
+# SaltStack, sc.local
+dn: OU=SaltStack,DC=sc,DC=local
+distinguishedName: OU=SaltStack,DC=sc,DC=local
+
+# Users, SaltStack, sc.local
+dn: OU=Users,OU=SaltStack,DC=sc,DC=local
+distinguishedName: OU=Users,OU=SaltStack,DC=sc,DC=local
+
+# salt.adm, Users, SaltStack, sc.local
+dn: CN=salt.adm,OU=Users,OU=SaltStack,DC=sc,DC=local
+distinguishedName: CN=salt.adm,OU=Users,OU=SaltStack,DC=sc,DC=local
+
+# minions, Users, sc.local
+dn: CN=minions,CN=Users,DC=sc,DC=local
+distinguishedName: CN=minions,CN=Users,DC=sc,DC=local
+
+# SALT-MASTER, Computers, sc.local
+dn: CN=SALT-MASTER,CN=Computers,DC=sc,DC=local
+distinguishedName: CN=SALT-MASTER,CN=Computers,DC=sc,DC=local
+
+# deb-minions, sc.local
+dn: OU=deb-minions,DC=sc,DC=local
+distinguishedName: OU=deb-minions,DC=sc,DC=local
+
+# rpm-minions, sc.local
+dn: OU=rpm-minions,DC=sc,DC=local
+distinguishedName: OU=rpm-minions,DC=sc,DC=local
+
+# ubuntu, deb-ou, deb-minions, sc.local
+dn: CN=ubuntu,OU=deb-ou,OU=deb-minions,DC=sc,DC=local
+distinguishedName: CN=ubuntu,OU=deb-ou,OU=deb-minions,DC=sc,DC=local
+
+# debian, deb-ou, deb-minions, sc.local
+dn: CN=debian,OU=deb-ou,OU=deb-minions,DC=sc,DC=local
+distinguishedName: CN=debian,OU=deb-ou,OU=deb-minions,DC=sc,DC=local
+
+# fedora, rpm-minions, sc.local
+dn: CN=fedora,OU=rpm-minions,DC=sc,DC=local
+distinguishedName: CN=fedora,OU=rpm-minions,DC=sc,DC=local
+
+# deb-ou, deb-minions, sc.local
+dn: OU=deb-ou,OU=deb-minions,DC=sc,DC=local
+distinguishedName: OU=deb-ou,OU=deb-minions,DC=sc,DC=local
+
+# search reference
+ref: ldap://ForestDnsZones.sc.local/DC=ForestDnsZones,DC=sc,DC=local
+
+# search reference
+
 ```
-
-Если компьютер лежит прямо в `DC=sc,DC=local` без OU — `ldap_host_ous` будет пустым.
