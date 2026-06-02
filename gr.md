@@ -1,3 +1,4 @@
+```
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -133,7 +134,7 @@ def ldap_host():
         grains['ldap_role'] = 'error'
     
     return grains
-
+```
 
 
 ---
