@@ -332,7 +332,7 @@ domain_group: minions
 
 ---
 ---
-
+```
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -446,3 +446,4 @@ def ldap_host():
         grains['ldap_host_groups'] = []
     
     return grains
+```
