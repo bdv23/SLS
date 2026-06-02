@@ -3,154 +3,183 @@
 # -*- coding: utf-8 -*-
 """
 Custom Salt grain: ldap_host для Active Directory
-Возвращает список доменных групп, в которых состоит компьютер.
-Поддерживает фильтрацию групп по родительскому OU.
+Читает membership миньона в LDAP-группах AD и возвращает:
+  - ldap_host_groups: список имен групп (CN)
+  - ldap_host_ous: список OU, в которых находятся группы
+  - ldap_role: роль на основе группы (server, master)
+  - ldap_full_dn: DN хоста
 """
 
 import socket
 
 __virtualname__ = 'ldap_host'
 
-# ================= LDAP-конфигурация =================
+# LDAP-конфиг
 LDAP_SERVER = 'ldap://172.18.84.18:389'
 LDAP_BIND_DN = 'CN=Administrator,CN=Users,DC=sc,DC=local'
-LDAP_BIND_PW = 'qwe123!@#'  # ⚠️ Рекомендуется использовать secrets management
-LDAP_SEARCH_BASE = 'DC=sc,DC=local'
-
-# Фильтрация групп по родительскому OU.
-# Пустой список = возвращать все группы.
-# Пример: ['OU=SaltGroups,DC=sc,DC=local']
-# Группа включается, если её полный DN находится ВНУТРИ указанного OU.
-FILTER_OUS = []
-# =====================================================
+LDAP_BIND_PW = 'qwe123!@#'
+LDAP_COMPUTERS_BASE = 'CN=Computers,DC=sc,DC=local'
+LDAP_GROUPS_BASE = 'CN=Users,DC=sc,DC=local'
 
 
 def __virtual__():
     return __virtualname__
 
 
-def _parse_dn(dn_str):
+def _parse_dn_component(dn_str, component_type):
     """
-    Парсит DN в словарь компонентов.
-    Пример: 'CN=minions,CN=Users,DC=sc,DC=local'
-    -> {'CN': ['minions', 'Users'], 'DC': ['sc', 'local'], 'OU': []}
+    Универсальная функция для извлечения компонента из DN.
+    
+    :param dn_str: Строка DN (bytes или str)
+    :param component_type: 'OU' или 'CN'
+    :return: Значение первого найденного компонента или None
     """
-    result = {}
-    for part in dn_str.split(','):
-        if '=' in part:
-            key, value = part.split('=', 1)
-            key = key.strip().upper()
-            value = value.strip()
-            result.setdefault(key, []).append(value)
-    return result
-
-
-def _is_group_in_ou(group_dn, ou_filter):
-    """
-    Проверяет, находится ли группа внутри указанного фильтра OU.
-    Сравнивает DN в нормализованном виде (без пробелов, нижний регистр).    """
-    g_dn = group_dn.lower().replace(' ', '')
-    f_ou = ou_filter.lower().replace(' ', '')
-    return g_dn == f_ou or g_dn.endswith(',' + f_ou)
-
+    if isinstance(dn_str, bytes):
+        dn_str = dn_str.decode('utf-8')
+    
+    # Приводим к верхнему регистру для поиска префикса, но сохраняем оригинал для возврата
+    parts = dn_str.split(',')
+    prefix = f"{component_type.upper()}="
+    
+    for part in parts:
+        part_stripped = part.strip()
+        if part_stripped.upper().startswith(prefix):
+            # Возвращаем значение после префикса (например, после 'OU=')
+            return part_stripped[len(prefix):]
+    return None
 
 def ldap_host():
-    # Инициализация зерен с дефолтными значениями
-    grains = {
+    grains = {}
+    
+    # Инициализация дефолтных значений
+    default_grains = {
+        'ldap_host_group': 'unassigned',
+        'ldap_role': 'unassigned',
         'ldap_host_groups': [],
-        'ldap_host_groups_full': [],
-        'ldap_host_id': None,
-        'ldap_full_dn': None,
-        'ldap_host_ou': [],
-        'ldap_error': None
+        'ldap_host_ous': [],
+        'ldap_host_full_groups': [],
+        'ldap_host_id': __opts__.get('id', socket.gethostname())
     }
-
-    # Проверка зависимости
+    
+    # Пробуем импортировать ldap
     try:
         import ldap
-        from ldap.filter import escape_filter_chars
     except ImportError:
-        grains['ldap_error'] = 'python-ldap not installed. Run: apt install python3-ldap'
-        return grains
-
-    minion_id = __opts__.get('id', socket.gethostname())
-    computer_name = minion_id.rstrip('$').upper()
-    grains['ldap_host_id'] = minion_id
-
+        default_grains.update({
+            'ldap_error': 'python-ldap not installed. Run: apt install python3-ldap',
+            'ldap_host_group': 'no-ldap-module',
+            'ldap_role': 'no-ldap-module'
+        })
+        return default_grains
+    
+    minion_id = default_grains['ldap_host_id']
+    computer_name = minion_id.upper().rstrip('$')
+    dn = f"CN={computer_name},{LDAP_COMPUTERS_BASE}"
+    
+    ldap_config = {
+        'server': LDAP_SERVER,
+        'binddn': LDAP_BIND_DN,
+        'bindpw': LDAP_BIND_PW,
+    }
+    
     conn = None
     try:
-        # Подключение к LDAP
-        conn = ldap.initialize(LDAP_SERVER)
+        conn = ldap.initialize(ldap_config['server'])
         conn.set_option(ldap.OPT_REFERRALS, 0)
         conn.set_option(ldap.OPT_TIMEOUT, 10)
-        conn.simple_bind_s(LDAP_BIND_DN, LDAP_BIND_PW)
-
-        # Поиск компьютера (учитываем варианты имени)
-        safe_name = escape_filter_chars(computer_name)
-        search_filter = (
-            f"(&(objectClass=computer)"
-            f"(|(sAMAccountName={safe_name}$)(cn={safe_name})(sAMAccountName={safe_name})))"
-        )
-
-        result = conn.search_s(
-            LDAP_SEARCH_BASE,
-            ldap.SCOPE_SUBTREE,
-            search_filter,
-            ['dn', 'cn', 'memberOf']
-        )
-        if not result or not result[0][0]:
-            grains['ldap_error'] = f'Computer not found: {computer_name}'
+        conn.simple_bind_s(ldap_config['binddn'], ldap_config['bindpw'])
+        
+        # Проверяем существование компьютера
+        try:
+            result = conn.search_s(
+                dn,
+                ldap.SCOPE_BASE,
+                '(objectClass=computer)',
+                ['dn', 'cn', 'memberOf']
+            )
+        except ldap.NO_SUCH_OBJECT:            grains.update(default_grains)
+            grains['ldap_full_dn'] = dn
+            grains['ldap_error'] = 'Computer object not found in AD'
             return grains
-
-        # Обработка найденного компьютера
+        
+        if not result:
+            grains.update(default_grains)
+            return grains
+            
         host_dn, attrs = result[0]
-        host_dn_str = host_dn.decode('utf-8') if isinstance(host_dn, bytes) else host_dn
-        grains['ldap_full_dn'] = host_dn_str
-
-        # Парсим OU компьютера для дополнительной информации
-        host_dn_parts = _parse_dn(host_dn_str)
-        grains['ldap_host_ou'] = host_dn_parts.get('OU', [])
-
-        # Сбор групп
-        groups = []
-        member_of = attrs.get(b'memberOf', [])
-        if member_of:
-            for group_dn in member_of:
-                group_str = group_dn.decode('utf-8') if isinstance(group_dn, bytes) else group_dn
-
-                # Применяем фильтр по OU, если задан
-                if FILTER_OUS:
-                    if not any(_is_group_in_ou(group_str, ou) for ou in FILTER_OUS):
-                        continue
-
-                # Парсим информацию о группе
-                group_parts = _parse_dn(group_str)
-                cn_list = group_parts.get('CN', [])
-                group_name = cn_list[0] if cn_list else group_str.split(',')[0].replace('CN=', '', 1)
-
-                groups.append({
-                    'name': group_name,
-                    'dn': group_str,
-                    'ou': group_parts.get('OU', []),  # OU, в котором лежит сама группа
-                    'components': group_parts
-                })
-
-        grains['ldap_host_groups'] = [g['name'] for g in groups]
-        grains['ldap_host_groups_full'] = groups
-
+        grains['ldap_full_dn'] = host_dn.decode('utf-8') if isinstance(host_dn, bytes) else host_dn
+        grains['ldap_host_id'] = minion_id
+        
+        # Парсим memberOf
+        groups_cn = []
+        groups_ou = []
+        groups_full_dn = []
+        
+        if b'memberOf' in attrs:
+            for group_dn in attrs[b'memberOf']:
+                group_dn_str = group_dn.decode('utf-8') if isinstance(group_dn, bytes) else group_dn
+                groups_full_dn.append(group_dn_str)
+                
+                # Извлекаем CN (имя группы)
+                cn = _parse_dn_component(group_dn_str, 'CN')
+                if cn:
+                    groups_cn.append(cn)
+                
+                # Извлекаем OU (подразделение, где лежит группа)
+                ou = _parse_dn_component(group_dn_str, 'OU')
+                if ou:
+                    groups_ou.append(ou)
+        
+        grains['ldap_host_groups'] = groups_cn
+        grains['ldap_host_ous'] = groups_ou
+        grains['ldap_host_full_groups'] = groups_full_dn
+        
+        # Определяем роль по приоритету (по имени группы CN)
+        role = 'unassigned'
+        primary_group = 'unassigned'
+        
+        priority = [
+            ('salt-masters', 'master'),
+            ('minions', 'server'),
+            ('linux-servers', 'server'),
+            ('web-servers', 'web'),
+            ('db-servers', 'db'),
+        ]
+        
+        for group_name, group_role in priority:            if group_name in groups_cn:
+                primary_group = group_name
+                role = group_role
+                break
+        
+        grains['ldap_host_group'] = primary_group
+        grains['ldap_role'] = role
+        grains['domain_group'] = primary_group
+        grains['salt_role'] = role
+        
     except ldap.SERVER_DOWN:
+        grains.update(default_grains)
         grains['ldap_error'] = 'LDAP server unreachable'
+        grains['ldap_host_group'] = 'error'
+        grains['ldap_role'] = 'error'
+        
     except ldap.INVALID_CREDENTIALS:
+        grains.update(default_grains)
         grains['ldap_error'] = 'Invalid bind credentials'
-    except ldap.FILTER_ERROR:
-        grains['ldap_error'] = 'Invalid LDAP search filter syntax'
+        grains['ldap_host_group'] = 'error'
+        grains['ldap_role'] = 'error'
+        
     except Exception as e:
-        grains['ldap_error'] = f'{type(e).__name__}: {str(e)}'
-    finally:        if conn:
+        grains.update(default_grains)
+        grains['ldap_error'] = str(e)
+        grains['ldap_host_group'] = 'error'
+        grains['ldap_role'] = 'error'
+        
+    finally:
+        if conn:
             try:
                 conn.unbind_s()
-            except Exception:
-                pass  # Игнорируем ошибки при закрытии
-
+            except:
+                pass
+    
     return grains
 ```
