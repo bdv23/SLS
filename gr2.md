@@ -190,3 +190,42 @@ def ldap_host():
 
     return grains
 ```
+
+---
+---
+
+root@salt-master:/home/saltadm# salt '*' grains.get ldap_ou_groups
+usaltm:
+    ----------
+debian-minion-1:
+    ----------
+ubuntu-minion-1:
+    ----------
+salt-master:
+root@salt-master:/home/saltadm# salt '*' grains.get ldap_host_ous
+usaltm:
+ubuntu-minion-1:
+salt-master:
+debian-minion-1:
+root@salt-master:/home/saltadm# salt '*' grains.get ldap_host_ous
+salt-master:
+usaltm:
+debian-minion-1:
+ubuntu-minion-1:
+root@salt-master:/home/saltadm# salt '*' grains.get ldap_role
+usaltm:
+    unassigned
+salt-master:
+    unassigned
+debian-minion-1:
+    unassigned
+ubuntu-minion-1:
+    unassigned
+root@salt-master:/home/saltadm# salt '*' grains.get ldap_ou_groups
+salt-master:
+usaltm:
+    ----------
+debian-minion-1:
+    ----------
+ubuntu-minion-1:
+    ----------
