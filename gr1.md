@@ -1,4 +1,3 @@
-```
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -140,4 +139,37 @@ def ldap_host():
                 pass
 
     return grains
-```
+
+вот код, он не находит ou
+root@salt-master:/home/saltadm# salt '*' saltutil.sync_grains
+usaltm:
+debian-minion-1:
+ubuntu-minion-1:
+salt-master:
+root@salt-master:/home/saltadm# journalctl -u salt-master -f
+Jun 02 16:14:52 salt-master salt-master[3106632]: The salt master is shutdown. Master received a SIGTERM. Exited.
+Jun 02 16:14:52 salt-master systemd[1]: salt-master.service: Deactivated successfully.
+Jun 02 16:14:52 salt-master systemd[1]: Stopped salt-master.service - The Salt Master Server.
+Jun 02 16:14:52 salt-master systemd[1]: salt-master.service: Consumed 16.561s CPU time.
+Jun 02 16:14:52 salt-master systemd[1]: Starting salt-master.service - The Salt Master Server...
+Jun 02 16:14:53 salt-master systemd[1]: Started salt-master.service - The Salt Master Server.
+Jun 02 16:15:04 salt-master salt-master[3108201]: [WARNING ] Rejected authentication attempt using protocol version 2 (minimum required: 3)
+Jun 02 16:15:10 salt-master salt-master[3108198]: [WARNING ] Rejected authentication attempt using protocol version 2 (minimum required: 3)
+Jun 02 16:15:13 salt-master salt-master[3108202]: [WARNING ] Rejected authentication attempt using protocol version 2 (minimum required: 3)
+Jun 02 16:15:48 salt-master salt-master[3108200]: [WARNING ] Rejected authentication attempt using protocol version 2 (minimum required: 3)
+^C
+root@salt-master:/home/saltadm# salt '*' grains.get ldap_role
+usaltm:
+    unassigned
+debian-minion-1:
+    unassigned
+ubuntu-minion-1:
+    unassigned
+salt-master:
+    unassigned
+root@salt-master:/home/saltadm# salt '*' grains.get ldap_host_ous
+usaltm:
+debian-minion-1:
+salt-master:
+ubuntu-minion-1:
+root@salt-master:/home/saltadm#
