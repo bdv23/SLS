@@ -328,3 +328,121 @@ domain_group: minions
 ```
 
 Если нужно, могу добавить фильтрацию групп по OU (например, возвращать только группы из определённого OU) или изменить логику определения роли.
+
+
+---
+---
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Custom Salt grain: ldap_host для Active Directory
+Возвращает список доменных групп, в которых состоит компьютер.
+Можно фильтровать группы по OU, в котором они находятся.
+"""
+
+import socket
+
+__virtualname__ = 'ldap_host'
+
+# LDAP-конфиг
+LDAP_SERVER = 'ldap://172.18.84.18:389'
+LDAP_BIND_DN = 'CN=Administrator,CN=Users,DC=sc,DC=local'
+LDAP_BIND_PW = 'qwe123!@#'
+LDAP_SEARCH_BASE = 'DC=sc,DC=local'
+
+# Если нужны только группы из определённых OU, укажи их тут.
+# Пустой список = все группы.
+# Пример: ['OU=SaltGroups,DC=sc,DC=local']
+FILTER_OUS = []
+
+
+def __virtual__():
+    return __virtualname__
+
+
+def ldap_host():
+    grains = {}
+    
+    try:
+        import ldap
+    except ImportError:
+        return {
+            'ldap_host_groups': [],
+            'ldap_error': 'python-ldap not installed. Run: apt install python3-ldap'
+        }
+    
+    minion_id = __opts__.get('id', socket.gethostname())
+    computer_name = minion_id.upper().rstrip('$')
+    
+    try:
+        conn = ldap.initialize(LDAP_SERVER)
+        conn.set_option(ldap.OPT_REFERRALS, 0)
+        conn.set_option(ldap.OPT_TIMEOUT, 10)
+        conn.simple_bind_s(LDAP_BIND_DN, LDAP_BIND_PW)
+        
+        # Поиск компьютера по всему домену
+        search_filter = (
+            '(&(objectClass=computer)'
+            '(|(sAMAccountName={}$)(cn={}))'
+            ')'.format(computer_name, computer_name)
+        )
+        
+        result = conn.search_s(
+            LDAP_SEARCH_BASE,
+            ldap.SCOPE_SUBTREE,
+            search_filter,
+            ['dn', 'cn', 'memberOf']
+        )
+        
+        if not result:
+            grains['ldap_host_groups'] = []
+            grains['ldap_error'] = f'Computer not found: {computer_name}'
+            grains['ldap_host_id'] = minion_id
+            conn.unbind_s()
+            return grains
+        
+        host_dn, attrs = result[0]
+        host_dn_str = host_dn.decode('utf-8') if isinstance(host_dn, bytes) else host_dn
+        grains['ldap_full_dn'] = host_dn_str
+        grains['ldap_host_id'] = minion_id
+        
+        # Список доменных групп с фильтрацией по OU
+        groups = []
+        if b'memberOf' in attrs:
+            for group_dn in attrs[b'memberOf']:
+                group_str = group_dn.decode('utf-8')
+                
+                # Фильтр по OU: если FILTER_OUS задан, проверяем,
+                # что группа находится в одном из указанных OU
+                if FILTER_OUS:
+                    match = any(
+                        ou.lower() in group_str.lower()
+                        for ou in FILTER_OUS
+                    )
+                    if not match:
+                        continue
+                
+                # Извлекаем CN из DN: CN=minions,CN=Users,DC=sc,DC=local → minions
+                cn = group_str.split(',')[0].replace('CN=', '')
+                groups.append({
+                    'name': cn,
+                    'dn': group_str
+                })
+        
+        grains['ldap_host_groups'] = [g['name'] for g in groups]
+        grains['ldap_host_groups_full'] = groups  # полный DN каждой группы
+        
+        conn.unbind_s()
+        
+    except ldap.SERVER_DOWN:
+        grains['ldap_error'] = 'LDAP server unreachable'
+        grains['ldap_host_groups'] = []
+    except ldap.INVALID_CREDENTIALS:
+        grains['ldap_error'] = 'Invalid bind credentials'
+        grains['ldap_host_groups'] = []
+    except Exception as e:
+        grains['ldap_error'] = str(e)
+        grains['ldap_host_groups'] = []
+    
+    return grains
